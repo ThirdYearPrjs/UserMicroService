@@ -2,34 +2,97 @@ package bt.edu.gcit.usermicroservice.security;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.context.annotation.Bean;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.authentication.ProviderManager;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import java.util.Arrays;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import bt.edu.gcit.usermicroservice.security.oauth.CustomerOAuth2UserService;
+import bt.edu.gcit.usermicroservice.security.oauth.OAuth2LoginSuccessHandler;
 
 @Configuration
 @EnableWebSecurity
 public class ShopmeSecurityConfig {
+    public ShopmeSecurityConfig() {
+        System.out.println("ShopmeSecurityConfig created");
+    }
+
+    @Autowired
+    private JwtRequestFilter jwtRequestFilter;
+
+    @Autowired
+    private UserDetailsService userDetailsService;
+
+    @Autowired
+    private CustomerOAuth2UserService oAuth2UserService;
+
+    @Autowired
+    private OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+
     @Bean
-    public PasswordEncoder passwordEncoder() {
+    public AuthenticationManager customAuthenticationManager() throws Exception {
+        System.out.println("H2i ");
+        return new ProviderManager(Arrays.asList(authProvider()));
+    }
+
+    @Bean
+    public static PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
     @Bean
+    public AuthenticationProvider authProvider() {
+        System.out.println("Initializing AuthenticationProvider...");
+
+        // Pass the userDetailsService directly into the constructor
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(userDetailsService);
+
+        // Set the password encoder using the setter
+        authProvider.setPasswordEncoder(passwordEncoder());
+
+        System.out.println("UserDetailsService assigned: " + userDetailsService.getClass().getName());
+        return authProvider;
+    }
+
+    @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http.authorizeHttpRequests(configurer -> configurer
-                .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/users/checkDuplicateEmail").permitAll()
-                .requestMatchers(HttpMethod.PUT, "/api/users/{id}").permitAll()
-                .requestMatchers(HttpMethod.DELETE, "/api/users/{id}").permitAll()
-                .requestMatchers(HttpMethod.PUT, "/api/users/{id}/enabled").permitAll()
+        http
+                // 1. New Lambda-style CSRF configuration
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(configurer -> configurer
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/users").hasAuthority("Admin")
+                        .requestMatchers(HttpMethod.POST, "/api/roles").hasAuthority("Admin")
+                        .requestMatchers(HttpMethod.GET, "/api/users/checkDuplicateEmail").hasAuthority("Admin")
+                        .requestMatchers(HttpMethod.PUT, "/api/users/{id}").hasAuthority("Admin")
+                        .requestMatchers(HttpMethod.DELETE, "/api/users/{id}").hasAuthority("Admin")
+                        .requestMatchers(HttpMethod.PUT, "/api/users/{id}/enabled").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/countries/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/countries").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/countries").permitAll()
+                        .requestMatchers(HttpMethod.DELETE, "/api/countries").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/states/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/states/{country_id}").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/states").permitAll()
+                        .requestMatchers(HttpMethod.DELETE, "/api/states").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/customer/**").permitAll())
+                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class)
 
-                .anyRequest().authenticated());
-
-        // Updated Lambda syntax for Spring Security 7+
-        http.csrf(csrf -> csrf.disable());
+                .oauth2Login(oauth2 -> oauth2
+                        .userInfoEndpoint(userInfo -> userInfo.userService(oAuth2UserService))
+                        .successHandler(oAuth2LoginSuccessHandler));
 
         return http.build();
     }
