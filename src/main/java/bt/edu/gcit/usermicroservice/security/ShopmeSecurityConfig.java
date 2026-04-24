@@ -42,7 +42,7 @@ public class ShopmeSecurityConfig {
     @Bean
     public AuthenticationManager customAuthenticationManager() throws Exception {
         System.out.println("H2i ");
-        return new ProviderManager(Arrays.asList(authProvider()));
+        return new ProviderManager(Arrays.asList(authenticationProvider())); // Corrected name
     }
 
     @Bean
@@ -51,26 +51,21 @@ public class ShopmeSecurityConfig {
     }
 
     @Bean
-    public AuthenticationProvider authProvider() {
-        System.out.println("Initializing AuthenticationProvider...");
-
-        // Pass the userDetailsService directly into the constructor
-        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(userDetailsService);
-
-        // Set the password encoder using the setter
-        authProvider.setPasswordEncoder(passwordEncoder());
-
-        System.out.println("UserDetailsService assigned: " + userDetailsService.getClass().getName());
+    public DaoAuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+        authProvider.setUserDetailsService(userDetailsService); // The service to find users
+        authProvider.setPasswordEncoder(passwordEncoder()); // The bean that encodes passwords
         return authProvider;
     }
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // 1. New Lambda-style CSRF configuration
+                .cors(cors -> cors.disable())
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(configurer -> configurer
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users").hasAuthority("Admin")
