@@ -2,6 +2,7 @@ package bt.edu.gcit.usermicroservice.rest;
 
 import bt.edu.gcit.usermicroservice.entity.User;
 import bt.edu.gcit.usermicroservice.service.UserService;
+import bt.edu.gcit.usermicroservice.service.ImageUploadService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -17,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.DeleteMapping;
+
+import java.util.List;
 import java.util.Map;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
@@ -31,51 +34,52 @@ import jakarta.validation.constraints.NotNull;
 @Validated
 public class UserRestController {
     private UserService userService;
+    private ImageUploadService imageUploadService;
 
     @Autowired
-    public UserRestController(UserService userService) {
+    public UserRestController(UserService userService, ImageUploadService imageUploadService) {
         this.userService = userService;
+        this.imageUploadService = imageUploadService;
     }
 
     @PostMapping(value = "/users", consumes = "multipart/form-data")
-    public User save(@RequestPart("firstName") @Valid @NotNull String firstName,
-            @RequestPart("lastName") @Valid @NotNull String lastName,
-            @RequestPart("email") @Valid @NotNull String email,
-            @RequestPart("password") @Valid @NotNull String password,
-            @RequestPart("photo") @Valid @NotNull MultipartFile photo,
-            @RequestPart("roles") @Valid @NotNull String rolesJson) {
+    public User save(@RequestPart("firstName") String firstName,
+            @RequestPart("lastName") String lastName,
+            @RequestPart("email") String email,
+            @RequestPart("password") String password,
+            @RequestPart(value = "photo", required = false) MultipartFile photo, // Added required = false
+            @RequestPart("roles") String rolesJson) {
         try {
-            // Create a new User object
+            if (userService.isEmailDuplicate(email)) {
+                throw new RuntimeException("Email already exists: " + email);
+            }
+
+            // Handle the case where the photo wasn't sent
+            String imageUrl = null;
+            if (photo != null && !photo.isEmpty()) {
+                imageUrl = imageUploadService.uploadImage(photo);
+            }
+
             User user = new User();
             user.setFirstName(firstName);
             user.setLastName(lastName);
             user.setEmail(email);
             user.setPassword(password);
-            // user.setRoles(roles);
-            // Parse the roles JSON string into a Set<Role>
+            user.setPhoto(imageUrl); // This will safely be null if no photo is provided
+            user.setEnabled(true);
+
             ObjectMapper objectMapper = new ObjectMapper();
             Set<Role> roles = objectMapper.readValue(rolesJson, new TypeReference<Set<Role>>() {
             });
             user.setRoles(roles);
-            System.out.println("Uploading photo");
 
-            // Save the user and get the ID
-            User savedUser = userService.save(user);
+            return userService.save(user);
 
-            // Upload the user photo
-            System.out.println("Uploading photo" + savedUser.getId().intValue());
-            userService.uploadUserPhoto(savedUser.getId().intValue(),
-                    photo);
-
-            // Return the saved user
-            return savedUser;
         } catch (IOException e) {
-            // Handle the exception
-            throw new RuntimeException("Error while uploading photo",
-                    e);
+            throw new RuntimeException("Cloudinary upload failed", e);
         }
     }
-
+    
     // @PostMapping("/users")
     // public User save(@RequestBody User user) {
     // return userService.save(user);
@@ -95,12 +99,12 @@ public class UserRestController {
      * @return the updated User object
      */
     @PutMapping("/users/{id}")
-    public User updateUser(@PathVariable int id, @RequestBody User updatedUser) {
+    public User updateUser(@PathVariable Long id, @RequestBody User updatedUser) {
         return userService.updateUser(id, updatedUser);
     }
 
     @DeleteMapping("/users/{id}")
-    public void deleteUser(@PathVariable int id) {
+    public void deleteUser(@PathVariable Long id) {
         userService.deleteById(id);
     }
 
@@ -113,11 +117,21 @@ public class UserRestController {
      */
     @PutMapping("/users/{id}/enabled")
     public ResponseEntity<?> updateUserEnabledStatus(
-            @PathVariable int id, @RequestBody Map<String, Boolean> requestBody) {
+            @PathVariable Long id, @RequestBody Map<String, Boolean> requestBody) {
         Boolean enabled = requestBody.get("enabled");
         userService.updateUserEnabledStatus(id, enabled);
         System.out.println("User enabled status updated successfully");
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/users")
+    public List<User> getAllUsers() {
+        return userService.getAllUsers();
+    }
+
+    @GetMapping("/users/{id}")
+    public User getUserById(@PathVariable Long id) {
+        return userService.findByID(id);
     }
 
 }

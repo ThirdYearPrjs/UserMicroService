@@ -24,6 +24,15 @@ public class UserDAOImpl implements UserDAO {
     }
 
     @Override
+    public List<User> getAllUsers() {
+        // Implement the logic to retrieve all users from the database
+        // and return them as a list
+        TypedQuery<User> query = entityManager.createQuery("from User", User.class);
+        List<User> users = query.getResultList();
+        return users;
+    }
+
+    @Override
     public User findByEmail(String email) {
         TypedQuery<User> query = entityManager.createQuery("from User where email = :email", User.class);
         query.setParameter("email", email);
@@ -38,24 +47,24 @@ public class UserDAOImpl implements UserDAO {
     }
 
     @Override
-    public User findByID(int theId) {
+    public User findByID(Long theId) {
         // Implement the logic to find a user by their ID in the database
         // and return the user object
         User user = entityManager.find(User.class, theId);
         return user;
     }
 
-    @Override
-    public void deleteById(int theId) {
-        // Implement the logic to delete a user by their ID from the database
-        // find user by id
-        User user = findByID(theId);
-        // remove user
+@Override
+public void deleteById(Long theId) {
+    User user = entityManager.find(User.class, theId); 
+    if (user != null) {
+        user.getRoles().clear();
         entityManager.remove(user);
     }
+}
 
     @Override
-    public void updateUserEnabledStatus(int id, boolean enabled) {
+    public void updateUserEnabledStatus(Long id, boolean enabled) {
         User user = entityManager.find(User.class, id);
         System.out.println(user);
         if (user == null) {

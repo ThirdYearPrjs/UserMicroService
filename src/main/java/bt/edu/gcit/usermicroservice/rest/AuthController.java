@@ -42,6 +42,7 @@ public class AuthController {
         response.addCookie(jwtCookie);
         Map<String, Object> responseBody = new HashMap<>();
         responseBody.put("user", userDetails);
+        responseBody.put("jwt", jwt);
         return ResponseEntity.ok(responseBody);
         // Map<String, Object> response = new HashMap<>();
         // response.put("jwt", jwt);

@@ -1,8 +1,10 @@
 package bt.edu.gcit.usermicroservice.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
 import jakarta.persistence.*;
+import java.util.List;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import bt.edu.gcit.usermicroservice.entity.Country;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "states")
@@ -12,9 +14,9 @@ public class State {
     private int id;
     @Column(name = "name")
     private String name;
-    @ManyToOne
-    @JoinColumn(name = "country_id", nullable = false)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JsonIgnore
+    @JoinColumn(name = "country_id", nullable = false)
     private Country country;
 
     public int getId() {
